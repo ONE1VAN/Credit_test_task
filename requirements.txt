@@ -12,6 +12,8 @@ click==8.1.8
     # via uvicorn
 colorama==0.4.6
     # via click
+dotenv==0.9.9
+    # via -r requirements.in
 fastapi==0.115.12
     # via -r requirements.in
 greenlet==3.1.1
@@ -36,6 +38,8 @@ pyodbc==5.2.0
     # via -r requirements.in
 python-dateutil==2.9.0.post0
     # via pandas
+python-dotenv==1.1.0
+    # via dotenv
 pytz==2025.2
     # via pandas
 six==1.17.0
