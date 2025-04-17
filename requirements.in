@@ -6,3 +6,4 @@ sqlmodel
 pyodbc
 pandas
 dotenv
+python-multipart
