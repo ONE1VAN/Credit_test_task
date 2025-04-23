@@ -11,6 +11,7 @@ from fastapi import UploadFile, File
 from sqlalchemy.orm import Session
 import pandas as pd
 import io
+from datetime import date
 from db_operations.crud import (
     get_credits_by_user_id,
     get_total_payments,
@@ -18,6 +19,12 @@ from db_operations.crud import (
     calculate_overdue_days,
     get_existing_plan,
     create_plan,
+    count_issuances_in_month,
+    get_plan_sum_issuance,
+    get_issuances_for_month,
+    count_payments_in_month,
+    get_plan_sum_for_payments,
+    get_sum_payments_for_month,
 )
 
 Base.metadata.create_all(bind=engine)
@@ -164,3 +171,96 @@ def plans_insert(file: UploadFile = File(...), db: Session = Depends(get_db)):
     return JSONResponse(
         content={"message": "Plans were successfully inserted into the database."}
     )
+
+
+@app.get("/year_performance")
+def year_performance(year: int, db: Session = Depends(get_db)):
+    """
+    Retrieves a year’s performance data, including monthly and total issuance and payment performance.
+
+    Returns:
+    - Monthly data: Issuances, payments, and plan performance (in %).
+    - Total data: Aggregated performance for the year (total issuances, payments, and performance percentages).
+
+    The performance is calculated as the ratio of actual values to planned values, presented as a percentage.
+    """
+    current_date = date.today()
+    current_year = current_date.year
+    if year < 2000 or year > current_year + 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid year: {year}. Must be between 2000 and {current_year + 1}.",
+        )
+
+    results = []
+    for month in range(1, 13):
+        issuances = count_issuances_in_month(db, year, month)
+        plan_sum_issuances = get_plan_sum_issuance(db, year, month)
+        sum_issuances_for_month = get_issuances_for_month(db, year, month)
+        issuance_plan_percent = round(
+            (
+                (sum_issuances_for_month / plan_sum_issuances * 100)
+                if plan_sum_issuances
+                else 0
+            ),
+            2,
+        )
+        payments_in_month = count_payments_in_month(db, year, month)
+        plan_sum_for_payments = get_plan_sum_for_payments(db, year, month)
+        sum_payments_for_month = get_sum_payments_for_month(db, year, month)
+        payment_plan_performance_percent = round(
+            (
+                (sum_payments_for_month / plan_sum_for_payments * 100)
+                if plan_sum_for_payments
+                else 0
+            ),
+            2,
+        )
+
+        results.append(
+            {
+                "month": month,
+                "year": year,
+                "issuances": issuances,
+                "plan_sum_issuances": plan_sum_issuances,
+                "sum_issuances_for_month": sum_issuances_for_month,
+                "issuance_plan_percent": f"{issuance_plan_percent}%",
+                "payments_in_month": payments_in_month,
+                "plan_sum_for_payments": plan_sum_for_payments,
+                "sum_payments_for_month": sum_payments_for_month,
+                "payment_plan_performance_percent": f"{payment_plan_performance_percent}%",
+            }
+        )
+
+    total_sum_issuances = sum(item["sum_issuances_for_month"] for item in results)
+    plan_sum_issuances = sum(item["plan_sum_issuances"] for item in results)
+    total_plan_sum_for_payments = sum(item["plan_sum_for_payments"] for item in results)
+    total_sum_payments_for_month = sum(
+        item["sum_payments_for_month"] for item in results
+    )
+
+    for item in results:
+        item["sum_month_issuance_percent"] = (
+            f"{round((item['sum_issuances_for_month'] / total_sum_issuances * 100) if total_sum_issuances else 0, 2)}%"
+        )
+        item["sum_month_payment_percent"] = (
+            f"{round((item['sum_payments_for_month'] / total_sum_payments_for_month * 100) if total_sum_payments_for_month else 0, 2)}%"
+        )
+
+    results.append(
+        {
+            "total_issuances": sum(item["issuances"] for item in results),
+            "year": year,
+            "plan_sum_issuances": plan_sum_issuances,
+            "total_sum_issuances_for_month": total_sum_issuances,
+            "total_issuance_plan_percent": f"{round((total_sum_issuances / plan_sum_issuances * 100) if plan_sum_issuances else 0, 2)}%",
+            "total_payments_in_month": sum(
+                item["payments_in_month"] for item in results
+            ),
+            "total_plan_sum_for_payments": total_plan_sum_for_payments,
+            "total_sum_payments_for_month": total_sum_payments_for_month,
+            "total_payment_plan_performance_percent": f"{round((total_sum_payments_for_month / total_plan_sum_for_payments * 100) if total_plan_sum_for_payments else 0, 2)}%",
+        }
+    )
+
+    return results

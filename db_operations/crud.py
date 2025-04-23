@@ -5,6 +5,7 @@ from models.dictionary import Dictionary
 from models.credits import Credits
 from datetime import date
 from models.plans import Plans
+from sqlalchemy import extract
 
 
 def get_credits_by_user_id(db: Session, user_id: int):
@@ -122,3 +123,151 @@ def create_plan(db: Session, period: date, sum_: int, category_id: int) -> Plans
     new_plan = Plans(period=period, sum=sum_, category_id=category_id)
     db.add(new_plan)
     return new_plan
+
+
+def count_issuances_in_month(db: Session, year: int, month: int):
+    """
+    Counts the number of credit issuances in a specific month and year.
+
+    Args:
+        db (Session): The database session.
+        year (int): The year for which the issuances are being counted.
+        month (int): The month for which the issuances are being counted.
+
+    Returns:
+        int: The number of issuances in the specified month and year.
+    """
+    return (
+        db.query(Credits)
+        .filter(
+            extract("year", Credits.issuance_date) == year,
+            extract("month", Credits.issuance_date) == month,
+        )
+        .count()
+    )
+
+
+def get_plan_sum_issuance(db: Session, year: int, month: int):
+    """
+    Retrieves the total sum of the issuance plan for a specific month and year.
+
+    Args:
+        db (Session): The database session.
+        year (int): The year for which the plan sum is being calculated.
+        month (int): The month for which the plan sum is being calculated.
+
+    Returns:
+        float: The total sum of the issuance plan for the specified month and year.
+              Returns 0 if no plan sum is found.
+    """
+    return (
+        db.query(Plans)
+        .join(Dictionary)
+        .filter(
+            extract("year", Plans.period) == year,
+            extract("month", Plans.period) == month,
+            Dictionary.name == "issuance",
+        )
+        .with_entities(func.sum(Plans.sum))
+        .scalar()
+        or 0
+    )
+
+
+def get_issuances_for_month(db: Session, year: int, month: int):
+    """
+    Retrieves the total sum of issuances for a specific month and year.
+
+    Args:
+        db (Session): The database session.
+        year (int): The year for which the issuances are being calculated.
+        month (int): The month for which the issuances are being calculated.
+
+    Returns:
+        float: The total sum of the issuances for the specified month and year.
+              Returns 0 if no issuances are found.
+    """
+    return (
+        db.query(func.sum(Credits.body))
+        .filter(
+            extract("year", Credits.issuance_date) == year,
+            extract("month", Credits.issuance_date) == month,
+        )
+        .scalar()
+        or 0
+    )
+
+
+def count_payments_in_month(db: Session, year: int, month: int):
+    """
+    Counts the number of payments in a specific month and year.
+
+    Args:
+        db (Session): The database session.
+        year (int): The year for which the payments are being counted.
+        month (int): The month for which the payments are being counted.
+
+    Returns:
+        int: The number of payments in the specified month and year.
+    """
+    return (
+        db.query(Payments)
+        .join(Credits)
+        .filter(
+            extract("year", Payments.payment_date) == year,
+            extract("month", Payments.payment_date) == month,
+        )
+        .count()
+    )
+
+
+def get_plan_sum_for_payments(db: Session, year: int, month: int):
+    """
+    Retrieves the total sum of the payment plan for a specific month and year.
+
+    Args:
+        db (Session): The database session.
+        year (int): The year for which the payment plan sum is being calculated.
+        month (int): The month for which the payment plan sum is being calculated.
+
+    Returns:
+        int: The total sum of the payment plan for the specified month and year.
+              Returns 0 if no plan sum is found.
+    """
+    return (
+        db.query(Plans)
+        .join(Dictionary)
+        .filter(
+            extract("year", Plans.period) == year,
+            extract("month", Plans.period) == month,
+            Dictionary.name == "collection",
+        )
+        .with_entities(func.sum(Plans.sum))
+        .scalar()
+        or 0
+    )
+
+
+def get_sum_payments_for_month(db: Session, year: int, month: int):
+    """
+    Retrieves the total sum of payments for a specific month and year.
+
+    Args:
+        db (Session): The database session.
+        year (int): The year for which the payments are being calculated.
+        month (int): The month for which the payments are being calculated.
+
+    Returns:
+        float: The total sum of payments for the specified month and year.
+              Returns 0 if no payments are found.
+    """
+    return (
+        db.query(func.sum(Payments.sum))
+        .join(Credits)
+        .filter(
+            extract("year", Payments.payment_date) == year,
+            extract("month", Payments.payment_date) == month,
+        )
+        .scalar()
+        or 0
+    )
